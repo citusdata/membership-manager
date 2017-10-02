@@ -7,6 +7,7 @@ RUN apk add --no-cache \
         postgresql-dev \
         python3-dev && \
     pip install docker psycopg2 && \
+    apk add --no-cache libpq && \
     apk del psycodeps
 
 ADD manager.py /
