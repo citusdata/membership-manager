@@ -54,7 +54,7 @@ def connect_to_master():
 # main logic loop for the manager
 def docker_checker():
     client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
-    actions = {'health_status: healthy': add_worker, 'die': remove_worker}
+    actions = {'health_status: healthy': add_worker, 'destroy': remove_worker}
 
     # creates the necessary connection to make the sql calls if the master is ready
     conn = connect_to_master()
