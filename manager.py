@@ -11,7 +11,9 @@ import docker
 from os import environ
 import psycopg2
 import signal
+import time
 from sys import exit, stderr
+
 
 # adds a host to the cluster
 def add_worker(conn, host):
@@ -38,18 +40,26 @@ def remove_worker(conn, host):
 # This means that whenever manager is created, master is already there, so we should
 # always be able to successfully connect
 def connect_to_master():
-    citus_host    = environ.get('CITUS_HOST', 'master')
+    citus_host = environ.get('CITUS_HOST', 'master')
     postgres_pass = environ.get('POSTGRES_PASSWORD', '')
     postgres_user = environ.get('POSTGRES_USER', 'postgres')
-    postgres_db   = environ.get('POSTGRES_DB', postgres_user)
+    postgres_db = environ.get('POSTGRES_DB', postgres_user)
 
-    conn = psycopg2.connect("dbname=%s user=%s host=%s password=%s" %
-                            (postgres_db, postgres_user, citus_host, postgres_pass))
+    while True:
+        try:
+            conn = psycopg2.connect("dbname=%s user=%s host=%s password=%s" %
+                                    (postgres_db, postgres_user, citus_host, postgres_pass))
+            break
+        except psycopg2.OperationalError as e:
+            print("Could not connect to postgresql on host %s. Sleeping for 1 second" % citus_host)
+            time.sleep(1)
+
     conn.autocommit = True
 
     print("connected to %s" % citus_host, file=stderr)
 
     return conn
+
 
 # main logic loop for the manager
 def docker_checker():
@@ -71,7 +81,6 @@ def docker_checker():
                          "com.citusdata.role=Worker"],
                'type': 'container'}
 
-
     # touch a file to signal we're healthy, then consume events
     print('listening for events...', file=stderr)
     open('/manager-ready', 'a').close()
@@ -79,7 +88,7 @@ def docker_checker():
         worker_name = event['Actor']['Attributes']['name']
         status = event['status']
 
-        status=actions[status](conn, worker_name)
+        status = actions[status](conn, worker_name)
 
 
 # implemented to make Docker exit faster (it sends sigterm)
