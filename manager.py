@@ -28,8 +28,8 @@ def remove_worker(conn, host):
     worker_dict = ({'host': host, 'port': 5432})
 
     print("removing %s" % host, file=stderr)
-    cur.execute("""DELETE FROM pg_dist_shard_placement WHERE nodename=%(host)s AND
-                                                             nodeport=%(port)s;
+    cur.execute("""DELETE FROM pg_dist_placement WHERE groupid = (SELECT groupid FROM 
+                   pg_dist_node WHERE nodename = %(host)s AND nodeport = %(port)s);
                    SELECT master_remove_node(%(host)s, %(port)s)""", worker_dict)
 
 
