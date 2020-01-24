@@ -54,7 +54,7 @@ def connect_to_master():
 # main logic loop for the manager
 def docker_checker():
     client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
-    actions = {'health_status: healthy': add_worker, 'die': remove_worker}
+    actions = {'health_status: healthy': add_worker, 'destroy': remove_worker}
 
     # creates the necessary connection to make the sql calls if the master is ready
     conn = connect_to_master()
@@ -64,7 +64,7 @@ def docker_checker():
     this_container = client.containers.get(my_hostname)
     compose_project = this_container.labels['com.docker.compose.project']
 
-    # we only care about worker container health/die events from this cluster
+    # we only care about worker container health/destroy events from this cluster
     print("found compose project: %s" % compose_project, file=stderr)
     filters = {'event': list(actions),
                'label': ["com.docker.compose.project=%s" % compose_project,
