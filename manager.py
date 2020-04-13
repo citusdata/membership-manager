@@ -9,9 +9,14 @@
 # ----------------------------------------------------------------------------------------
 import docker
 from os import environ
+import os
 import psycopg2
 import signal
 from sys import exit, stderr
+from time import sleep
+
+# The health check file that is used to signal that the managerr is ready to accept new worker nodes
+HEALTHCHECK_FILE= '/healthcheck/manager-ready'
 
 # adds a host to the cluster
 def add_worker(conn, host):
@@ -35,16 +40,25 @@ def remove_worker(conn, host):
 
 # connect_to_master method is used to connect to master coordinator at the start-up.
 # Citus docker-compose has a dependency mapping as worker -> manager -> master.
-# This means that whenever manager is created, master is already there, so we should
-# always be able to successfully connect
+# This means that whenever manager is created, master is already there, but it may
+# not be ready to accept connections. We'll try until we can create a connection.
 def connect_to_master():
     citus_host    = environ.get('CITUS_HOST', 'master')
     postgres_pass = environ.get('POSTGRES_PASSWORD', '')
     postgres_user = environ.get('POSTGRES_USER', 'postgres')
     postgres_db   = environ.get('POSTGRES_DB', postgres_user)
 
-    conn = psycopg2.connect("dbname=%s user=%s host=%s password=%s" %
-                            (postgres_db, postgres_user, citus_host, postgres_pass))
+    conn = None
+    while conn is None:
+        try:
+            conn = psycopg2.connect("dbname=%s user=%s host=%s password=%s" %
+                                    (postgres_db, postgres_user, citus_host, postgres_pass))
+        except psycopg2.OperationalError as error:
+            print("Could not connect to %s, trying again in 1 second" % citus_host)
+            sleep(1)
+        except (Exception, psycopg2.Error) as error:
+            raise error
+        
     conn.autocommit = True
 
     print("connected to %s" % citus_host, file=stderr)
@@ -74,7 +88,7 @@ def docker_checker():
 
     # touch a file to signal we're healthy, then consume events
     print('listening for events...', file=stderr)
-    open('/manager-ready', 'a').close()
+    open(HEALTHCHECK_FILE, 'a').close()
     for event in client.events(decode=True, filters=filters):
         worker_name = event['Actor']['Attributes']['name']
         status = event['status']
@@ -89,6 +103,9 @@ def graceful_shutdown(signal, frame):
 
 
 def main():
+    if os.path.exists(HEALTHCHECK_FILE):
+        os.remove(HEALTHCHECK_FILE)
+
     signal.signal(signal.SIGTERM, graceful_shutdown)
     docker_checker()
 
