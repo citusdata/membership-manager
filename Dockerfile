@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     apk add --no-cache libpq && \
     apk del psycodeps
 
+RUN mkdir -p /healthcheck
 ADD manager.py /
 
 # the manager creates a file when ready to consume events
